@@ -4,7 +4,7 @@
 // The poem is fixed text; every run writes exactly the same bytes.
 // Node 22 standard library only. No network, no randomness, no input.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const LINES = [
@@ -21,14 +21,27 @@ const LINES = [
 
 const poem = LINES.join("\n") + "\n";
 
+// Runtime self-check BEFORE writing: the entry must be exactly 242 code
+// points (241 of poem text + one trailing newline) and end with a single
+// "\n". Fail fast instead of writing a bad file and only noticing later.
+const codePoints = [...poem].length;
+if (codePoints !== 242) {
+  throw new Error(`entry is ${codePoints} code points, expected exactly 242`);
+}
+if (!poem.endsWith("\n") || poem.endsWith("\n\n")) {
+  throw new Error("entry must end with exactly one trailing newline");
+}
+
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 mkdirSync(outDir, { recursive: true });
 
 const outPath = join(outDir, "entry.txt");
 writeFileSync(outPath, poem, "utf8");
 
-const codePoints = [...poem].length - 1; // exclude the trailing newline
-if (codePoints < 1 || codePoints > 280) {
-  throw new Error(`entry is ${codePoints} code points, must be 1-280`);
+// Verify the write round-tripped: what landed on disk must be byte-for-byte
+// the validated poem, not a truncated or re-encoded copy.
+if (readFileSync(outPath, "utf8") !== poem) {
+  throw new Error(`written file ${outPath} does not match validated poem`);
 }
-console.log(`wrote ${outPath} (${codePoints} characters)`);
+
+console.log(`wrote ${outPath} (${codePoints - 1} characters)`);
